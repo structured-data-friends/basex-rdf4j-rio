@@ -65,3 +65,8 @@ import module namespace rdf='com.rakensi.basex.xquery.functions.rdf.RioParserMod
 let $testfile := 'file://a-ttl-file'
 return rdf:parse-ttl($testfile)
 ```
+
+# Links
+
+* [Parsing and Writing RDF With Rio](https://rdf4j.org/documentation/programming/rio/)
+* [RDF4J Rio javadoc](https://rdf4j.org/javadoc/latest/org/eclipse/rdf4j/rio/package-summary.html)

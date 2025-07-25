@@ -1,5 +1,5 @@
 /*******************************************************************************
- * In addition to the license file in this project, this file is also
+ * In addition to the license file in this project, parts of this file are
  * Copyright (c) 2015 Eclipse RDF4J contributors, Aduna, and others.
  *
  * All rights reserved. This program and the accompanying materials
@@ -8,6 +8,8 @@
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * See https://github.com/eclipse-rdf4j/rdf4j/blob/main/core/rio/rdfxml/src/main/java/org/eclipse/rdf4j/rio/rdfxml/RDFXMLWriter.java
  *******************************************************************************/
 package com.rakensi.basex.xquery.functions.rdf;
 
@@ -230,8 +232,7 @@ public class RioParserModule extends QueryModule
       try
       {
         rdfDocument = DOMImplementationRegistry.newInstance().getDOMImplementation("XML 3.0").createDocument(null, null, null);
-        rootElement = rdfDocument.createElementNS(RDF.NAMESPACE, "rdf:RDF");
-        rootElement.setAttributeNS(XMLNS_NAMESPACE, "xmlns:rdf", RDF.NAMESPACE);
+        rootElement = createElement(RDF.NAMESPACE, "RDF");
       }
       catch (Exception e)
       {
@@ -284,7 +285,7 @@ public class RioParserModule extends QueryModule
       String predLocalName = predString.substring(predSplitIdx);
 
       // Create the element for the statement.
-      Element statementElement = rdfDocument.createElementNS(RDF.NAMESPACE, "rdf:Description");
+      Element statementElement = createElement(RDF.NAMESPACE, "Description");
       if (subj instanceof BNode) {
         statementElement.setAttributeNS(RDF.NAMESPACE, "rdf:nodeID", getValidNodeId((BNode) subj));
       } else {
@@ -294,9 +295,7 @@ public class RioParserModule extends QueryModule
       rootElement.appendChild(statementElement);
 
       // Create the element for the predicate.
-      String nsPrefix = namespaceTable.get(predNamespace);
-      Element predicateElement = rdfDocument.createElementNS(predNamespace, nsPrefix+":"+predLocalName);
-      predicateElement.setAttributeNS(XMLNS_NAMESPACE, "xmlns:" + nsPrefix, predNamespace);
+      Element predicateElement = createElement(predNamespace, predLocalName);
       statementElement.appendChild(predicateElement);
 
       // Handle the object of the statement.
@@ -313,26 +312,38 @@ public class RioParserModule extends QueryModule
         boolean isXMLLiteral = false;
         if (Literals.isLanguageLiteral(objLit)) {
           predicateElement.setAttribute("xml:lang", objLit.getLanguage().get());
+        }
+        CoreDatatype coreDatatype = objLit.getCoreDatatype();
+        // Check if datatype is rdf:XMLLiteral.
+        isXMLLiteral = coreDatatype == CoreDatatype.RDF.XMLLITERAL;
+        if (isXMLLiteral) {
+          predicateElement.setAttributeNS(RDF.NAMESPACE, "rdf:parseType", "Literal");
+        } else if (coreDatatype != CoreDatatype.XSD.STRING) {
+          predicateElement.setAttributeNS(RDF.NAMESPACE, "rdf:datatype", objLit.getDatatype().toString());
+        }
+        // Set the content of the predicate element.
+        if (isXMLLiteral) {
+          // Add the XML literal as XML content.
+          //TODO This is wrong, but we do not have a way to handle XML literals in RDF/XML.
+          predicateElement.setTextContent(objLit.getLabel());
         } else {
-          CoreDatatype coreDatatype = objLit.getCoreDatatype();
-          // Check if datatype is rdf:XMLLiteral.
-          isXMLLiteral = coreDatatype == CoreDatatype.RDF.XMLLITERAL;
-          if (isXMLLiteral) {
-            predicateElement.setAttributeNS(RDF.NAMESPACE, "rdf:parseType", "Literal");
-          } else if (coreDatatype != CoreDatatype.XSD.STRING) {
-            predicateElement.setAttributeNS(RDF.NAMESPACE, "rdf:datatype", objLit.getDatatype().toString());
-          }
-          // Set the content of the predicate element.
-          if (isXMLLiteral) {
-            // Add the XML literal as XML content.
-            //TODO This is wrong, but we do not have a way to handle XML literals in RDF/XML.
-            predicateElement.setTextContent(objLit.getLabel());
-          } else {
-            predicateElement.setTextContent(objLit.getLabel());
-          }
+          predicateElement.setTextContent(objLit.getLabel());
         }
       }
 
+    }
+
+    private Element createElement(String namespaceUri, String localName) {
+      Element element;
+      String prefix = namespaceTable.get(namespaceUri);
+      if (prefix == null) {
+        element = rdfDocument.createElementNS(namespaceUri, localName);
+        element.setAttribute("xmlns", namespaceUri);
+      } else {
+        element = rdfDocument.createElementNS(namespaceUri, prefix + ":" + localName);
+        element.setAttributeNS(XMLNS_NAMESPACE, "xmlns:" + prefix, namespaceUri);
+      }
+      return element;
     }
 
     @Override
