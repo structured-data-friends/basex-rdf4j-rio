@@ -19,6 +19,9 @@ import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
 import org.basex.query.QueryException;
 import org.basex.query.QueryModule;
 import org.basex.query.func.java.JavaCall;
@@ -40,7 +43,9 @@ import org.eclipse.rdf4j.rio.Rio;
 import org.eclipse.rdf4j.rio.helpers.AbstractRDFHandler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.bootstrap.DOMImplementationRegistry;
+import org.xml.sax.InputSource;
 
 public class RioParserModule extends QueryModule
 {
@@ -324,8 +329,15 @@ public class RioParserModule extends QueryModule
         // Set the content of the predicate element.
         if (isXMLLiteral) {
           // Add the XML literal as XML content.
-          //TODO This is wrong, but we do not have a way to handle XML literals in RDF/XML.
-          predicateElement.setTextContent(objLit.getLabel());
+          String serializedXml =
+              "<rdf:RDF xmlns:rdf=\""+RDF.NAMESPACE+"\">" +
+              objLit.getLabel() +
+              "</rdf:RDF>";
+          Element objXml = fromSerializedXml(serializedXml);
+          while (objXml.hasChildNodes()) {
+            Node child = objXml.removeChild(objXml.getFirstChild());
+            predicateElement.appendChild(child);
+          }
         } else {
           predicateElement.setTextContent(objLit.getLabel());
         }
@@ -344,6 +356,22 @@ public class RioParserModule extends QueryModule
         element.setAttributeNS(XMLNS_NAMESPACE, "xmlns:" + prefix, namespaceUri);
       }
       return element;
+    }
+
+    private Element fromSerializedXml(String serializedXml) throws RDFHandlerException {
+      try {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        InputSource is = new InputSource(new java.io.StringReader(serializedXml));
+        Document xmlDoc = builder.parse(is);
+        Element root = xmlDoc.getDocumentElement();
+        // Move the root element to the RDF document.
+        Element ownRoot = (Element) rdfDocument.importNode(root, true);
+        return ownRoot;
+      } catch (Exception e) {
+        throw new RDFHandlerException("Failed to parse XML literal: " + serializedXml, e);
+      }
     }
 
     @Override
